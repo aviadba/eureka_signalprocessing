@@ -1,8 +1,12 @@
-"""Signal object GUI tab"""
+"""Udemy Signal Processing tab classes. To be used together with generic gui as
+a 'quick and dirty' implemetation of main course topics. Good for dynamically
+experimenting with different data sources and procedures"""
 
 import numpy as np
 import inspect
-from mysignal import Signal, Noise, Filter, Detrend, Loadsignal, FFTsignal, Freqfilter, Convolution
+from udemySignalProcessing import *
+#Signal, Noise, Filter, Detrend, Loadsignal, FFTsignal, Freqfilter,
+#Convolution, Resample, Outliers
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import (
     FigureCanvasTkAgg, NavigationToolbar2Tk)
@@ -26,15 +30,17 @@ class Toolbar(NavigationToolbar2Tk):
 
 
 class Guitab(ttk.Frame):
-    tab_type = 'tab'
+    tab_type = 'generictab'
 
     def __init__(self, parent, controller, previous=None):
         """Class for creating a generic GUI tab
-        Arguments
-        ---------
-        parent <ttk.Notebook> - notebook to which tab will be inserted
-        controller <Tk> - root GUI
-        previous is the previous common object (i.e Signal NOT Signaltab)"""
+        Parameters
+            parent : ttk.Notebook
+                notebook to which tab will be inserted
+            controller : Tk
+                root GUI
+            previous : Cascade
+                Previous cascade object (i.e Signal NOT Signaltab)"""
         ttk.Frame.__init__(self, parent)
         # link to controller
         self.controller = controller
@@ -145,7 +151,7 @@ class Guitab(ttk.Frame):
 
     def update_controller(self):
         """method to notify controller gui a tab has been modified so changes
-        can propogate downstream"""
+        can propagate downstream"""
         self.controller.propogate_signal(self)
         # reset change flag
         self.change_flag = False
@@ -214,8 +220,14 @@ class Guitab(ttk.Frame):
                 axes_handle.plot(
                     self.controller.common[tab_name].source_signal.time,
                     self.controller.common[tab_name].source_signal.signal)
-                axes_handle.plot(
-                    self.controller.common[tab_name].time, self.controller.common[tab_name].signal)
+                if len(self.controller.common[tab_name].signal) < len(self.controller.common[tab_name].source_signal.signal)/2:
+                    axes_handle.scatter(x=self.controller.common[tab_name].time,
+                                        y=self.controller.common[tab_name].signal,
+                                        c='r',
+                                        marker='o')
+                else:
+                    axes_handle.plot(
+                        self.controller.common[tab_name].time, self.controller.common[tab_name].signal)
                 axes_handle.set_yscale('linear')
                 #plt.xlabel('time [sec|a.u]')
                 #plt.ylabel('Amplitude [au]')
@@ -283,7 +295,8 @@ class Guitab(ttk.Frame):
                                          [band_limit_freqs[1], filter_in],
                                          [band_limit_freqs[1], filter_out],
                                          [nyquist, filter_out]])
-                frequency_axes_handle.plot(ideal_filter[:, 0], ideal_filter[:, 1])
+                frequency_axes_handle.plot(
+                    ideal_filter[:, 0], ideal_filter[:, 1])
             elif self.controller.common[tab_name].filterfreq[0] in {'highpass',
                                                                     'butterhigh'}:
                 band_limit_freqs = self.controller.common[tab_name].filterfreq[1]
@@ -292,7 +305,8 @@ class Guitab(ttk.Frame):
                                          [band_limit_freqs, 0],
                                          [band_limit_freqs, 1],
                                          [nyquist, 1]])
-                frequency_axes_handle.plot(ideal_filter[:, 0], ideal_filter[:, 1])
+                frequency_axes_handle.plot(
+                    ideal_filter[:, 0], ideal_filter[:, 1])
             elif self.controller.common[tab_name].filterfreq[0] in {'lowpass',
                                                                     'butterlow'}:
                 band_limit_freqs = self.controller.common[tab_name].filterfreq[1]
@@ -331,7 +345,7 @@ class Signaltab(Guitab):
                                                                    'cubic'],
                                                    None, None, str],
                                          'sample_frequency': ['frequency [Hz]', 1000, None,
-                                                  None, int],
+                                                              None, int],
                                          'length':['length [sec]', 3, None,
                                                    None, float],
                                          'poles':['pole/spike/deg/event', 15, None, None, int],
@@ -377,8 +391,11 @@ class Noisetab(Guitab):
                                                        1, None, None,
                                                        float],
                                          'ntype': ['type', ['rand', 'normal',
-                                                            'pink'],
-                                                   None, None, str]}},
+                                                            'pink',
+                                                            'irregular', 'gap'],
+                                                   None, None, str],
+                                         'subsample': ['subsample/gap ratio', 0.1,
+                                                       None, None, float]}},
                               {'name': 'Combined',
                                'axes': 1,
                                'canvas': None,
@@ -397,7 +414,8 @@ class Noisetab(Guitab):
         if self.tab['parts'][1]['active'][0].get():
             # create noise
             self.controller.common[tab_name].add_noise(noise_amplitude=self.tab['parts'][1]['comps']['amplitude'][3],
-                                                       ntype=self.tab['parts'][1]['comps']['ntype'][3])
+                                                       ntype=self.tab['parts'][1]['comps']['ntype'][3],
+                                                       noise_sample_ratio=self.tab['parts'][1]['comps']['subsample'][3])
             # plot noise time and frequency domain representaion
             self.plot_signal(axes_handle=self.tab['parts'][1]['axes'],
                              canvas_handle=self.tab['parts'][1]['canvas'],
@@ -625,8 +643,10 @@ class FFTtab(Guitab):
                                'canvas': None,
                                'active': [tk.IntVar(value=1), None],
                                'comps': {'ffttype': ['method', ['FFT', 'Welch',
-                                                                'spectrogram',
-                                                               'time-freq'],
+                                                                'spectrogram', 'cwt'],
+                                                     None, None, str],
+                                         'wavelet': ['wavelet', ['morlet',
+                                                                 'ricker'],
                                                      None, None, str],
                                          'window': ['window size', 1024, None,
                                                     None, int]}}]}
@@ -651,9 +671,9 @@ class FFTtab(Guitab):
             elif self.tab['parts'][1]['comps']['ffttype'][3] == 'spectrogram':
                 self.controller.common[tab_name].spectrogram_signal(
                     window_size=self.tab['parts'][1]['comps']['window'][3])
-            elif self.tab['parts'][1]['comps']['ffttype'][3] == 'time-freq':
-                self.controller.common[tab_name].time_frequency(
-                    window_size=self.tab['parts'][1]['comps']['window'][3])
+            elif self.tab['parts'][1]['comps']['ffttype'][3] == 'cwt':
+                self.controller.common[tab_name].wavelet_cwt(
+                    wavelet=self.tab['parts'][1]['comps']['wavelet'][3])
         self.plot_signal(axes_handle=self.tab['parts'][1]['axes'],
                          canvas_handle=self.tab['parts'][1]['canvas'], stype='results')
 
@@ -751,7 +771,7 @@ class Freqfiltertab(Guitab):
             self.tab['parts'][1]['canvas'].draw()
             # plot source signal as results signal
             self.plot_signal(axes_handle=self.tab['parts'][2]['axes'],
-                             canvas_handle=self.tab['parts'][2]['canvas '], stype='results')
+                             canvas_handle=self.tab['parts'][2]['canvas'], stype='results')
 
 
 class Convolutiontab(Guitab):
@@ -773,7 +793,7 @@ class Convolutiontab(Guitab):
                                'active': [tk.IntVar(), None],
                                'comps': {'ktype': ['type', ['guassian', 'mean',
                                                             'linear', 'morlet',
-                                                           'ricker'],
+                                                            'ricker'],
                                                    None, None, str],
                                          'kradius': ['kernel radius', 9, None,
                                                      None, int]}},
@@ -811,3 +831,198 @@ class Convolutiontab(Guitab):
             self.plot_signal(axes_handle=self.tab['parts'][2]['axes'],
                              canvas_handle=self.tab['parts'][2]['canvas'], stype='results')
 
+
+class Resampletab(Guitab):
+    tab_type = 'resample'
+
+    def __init__(self, parent, controller, previous):
+        Guitab.__init__(self, parent, controller, previous)
+        self.issource = False
+        self.tab = {'name': 'resample',
+                    'type': 'plot',
+                    'parts': [{'name': 'Source',
+                               'axes': 1,
+                               'canvas': None,
+                               'active': [tk.IntVar(), None],
+                               'comps': None},
+                              {'name': 'resampling',
+                               'axes': 1,
+                               'canvas': None,
+                               'active': [tk.IntVar(), None],
+                               'comps': {'method': ['interp method', ['linear', 'cubic',
+                                                                      'nearest',
+                                                                      'fill gaps',
+                                                                      'remove_nan'],
+                                                    None, None, str],
+                                         'resample': ['resampling',
+                                                      ['factor',
+                                                       'target rate',
+                                                       'by data'], None,
+                                                      None, str],
+                                         'resample_factor': ['factor', 1, None,
+                                                             None, float]}}]}
+        self.layout_tab()
+
+    def refresh_action(self):
+        tab_name = self.name
+        # create signal memory in controller
+        self.controller.common[tab_name] = Resample(self.previous)
+        # plot source signal
+        self.plot_signal(axes_handle=self.tab['parts'][0]['axes'],
+                         canvas_handle=self.tab['parts'][0]['canvas'], stype='source')
+        # resample
+        if self.tab['parts'][1]['active'][0].get():
+            if self.tab['parts'][1]['comps']['method'][3] in {'linear',
+                                                              'cubic',
+                                                              'nearest'}:
+                if self.tab['parts'][1]['comps']['resample'][3] == 'factor':
+                    self.controller.common[tab_name].resample(method=self.tab['parts'][1]['comps']['method'][3],
+                                                              factor=self.tab['parts'][1]['comps']['resample_factor'][3],
+                                                              new_sample_rate=None)
+                elif self.tab['parts'][1]['comps']['resample'][3] == 'target rate':
+                    self.controller.common[tab_name].resample(method=self.tab['parts'][1]['comps']['method'][3],
+                                                              new_sample_rate=self.tab['parts'][1][
+                                                                  'comps']['resample_factor'][3],
+                                                              factor=None)
+                elif self.tab['parts'][1]['comps']['resample'][3] == 'by data':
+                    self.controller.common[tab_name].resample(method=self.tab['parts'][1]['comps']['method'][3],
+                                                              new_sample_rate=None,
+                                                              factor=None)
+
+            elif self.tab['parts'][1]['comps']['method'][3] == 'fill gaps':
+                self.controller.common[tab_name].fill_gaps()
+            elif self.tab['parts'][1]['comps']['method'][3] == 'remove_nan':
+                self.controller.common[tab_name].remove_nan()
+
+            self.plot_signal(axes_handle=self.tab['parts'][1]['axes'],
+                             canvas_handle=self.tab['parts'][1]['canvas'],
+                             stype='combined')
+        else:
+            # plot source signal as results signal
+            self.plot_signal(axes_handle=self.tab['parts'][1]['axes'],
+                             canvas_handle=self.tab['parts'][1]['canvas'], stype='results')
+
+
+class Outlierstab(Guitab):
+    tab_type = 'outliers'
+
+    def __init__(self, parent, controller, previous):
+        Guitab.__init__(self, parent, controller, previous)
+        self.issource = False
+        self.tab = {'name': 'resample',
+                    'type': 'plot',
+                    'parts': [{'name': 'Source',
+                               'axes': 1,
+                               'canvas': None,
+                               'active': [tk.IntVar(), None],
+                               'comps': None},
+                              {'name': 'outliers',
+                               'axes': 1,
+                               'canvas': None,
+                               'active': [tk.IntVar(), None],
+                               'comps': {'method': ['method', ['static',
+                                                               'rolling'],
+                                                    None, None, str],
+                                         'metric': ['metric', ['std',
+                                                               'rms'],
+                                                    None, None, str],
+                                         'factor': ['factor', 3, None, None, float],
+                                         'interpolator': ['interpolation', ['linear',
+                                                                            'nearest',
+                                                                            'previous',
+                                                                            'cubic',
+                                                                            'quadratic'], None,
+                                                          None, str],
+                                         'output': ['output', ['cleaned',
+                                                               'map'],
+                                                    None, None, str],
+                                         'window': ['window ratio', 0.05, None, None,
+                                                    float]}}]}
+        self.layout_tab()
+
+    def refresh_action(self):
+        tab_name = self.name
+        # create signal memory in controller
+        self.controller.common[tab_name] = Outliers(self.previous)
+        # plot source signal
+        self.plot_signal(axes_handle=self.tab['parts'][0]['axes'],
+                         canvas_handle=self.tab['parts'][0]['canvas'], stype='source')
+        # remove outliers
+        if self.tab['parts'][1]['active'][0].get():
+            if self.tab['parts'][1]['comps']['output'][3] == 'cleaned':
+                self.controller.common[tab_name].remove_outliers(method=self.tab['parts'][1]['comps']['method'][3],
+                                                                 metric=self.tab['parts'][1]['comps']['metric'][3],
+                                                                 factor=self.tab['parts'][1]['comps']['factor'][3],
+                                                                 kind=self.tab['parts'][1]['comps']['interpolator'][3],
+                                                                 window_ratio=self.tab['parts'][1]['comps']['window'][3])
+                self.plot_signal(axes_handle=self.tab['parts'][1]['axes'],
+                                 canvas_handle=self.tab['parts'][1]['canvas'],
+                                 stype='combined')
+            elif self.tab['parts'][1]['comps']['output'][3] == 'map':
+                self.controller.common[tab_name].map_noise_regions(
+                    metric=self.tab['parts'][1]['comps']['metric'][3])
+                self.plot_signal(axes_handle=self.tab['parts'][1]['axes'],
+                                 canvas_handle=self.tab['parts'][1]['canvas'],
+                                 stype='results')
+        else:
+            # plot source signal as results signal
+            self.plot_signal(axes_handle=self.tab['parts'][1]['axes'],
+                             canvas_handle=self.tab['parts'][1]['canvas'], stype='results')
+
+
+class Featurestab(Guitab):
+    tab_type = 'features'
+
+    def __init__(self, parent, controller, previous):
+        Guitab.__init__(self, parent, controller, previous)
+        self.issource = False
+        self.tab = {'name': 'features',
+                    'type': 'plot',
+                    'parts': [{'name': 'Source',
+                               'axes': 1,
+                               'canvas': None,
+                               'active': [tk.IntVar(), None],
+                               'comps': None},
+                              {'name': 'features',
+                               'axes': 1,
+                               'canvas': None,
+                               'active': [tk.IntVar(), None],
+                               'comps': {'method': ['method', ['global',
+                                                               'local'],
+                                                    None, None, str],
+                                         'feature': ['feature', ['max',
+                                                                 'min',
+                                                                 'hilbert_transform',
+                                                                 'variance_envelope'],
+                                                     None, None, str],
+                                         'order': ['order', 50, None, None,
+                                                   int],
+                                         'cutoff':['cutoff', 0.1, None, None,
+                                                   float]}}]}
+        self.layout_tab()
+
+    def refresh_action(self):
+        tab_name = self.name
+        # create signal memory in controller
+        self.controller.common[tab_name] = Features(self.previous)
+        # plot source signal
+        self.plot_signal(axes_handle=self.tab['parts'][0]['axes'],
+                         canvas_handle=self.tab['parts'][0]['canvas'], stype='source')
+        # remove outliers
+        if self.tab['parts'][1]['active'][0].get():
+            if self.tab['parts'][1]['comps']['feature'][3] in {'max', 'min'}:
+                self.controller.common[tab_name].find_extrema(extrema=self.tab['parts'][1]['comps']['feature'][3],
+                                                              method=self.tab['parts'][1]['comps']['method'][3],
+                                                              order=self.tab['parts'][1]['comps']['order'][3])
+            elif self.tab['parts'][1]['comps']['feature'][3] in {'hilbert_transform', 'variance_envelope'}:
+                self.controller.common[tab_name].find_envelope(method=self.tab['parts'][1]['comps']['feature'][3],
+                                                               order=self.tab['parts'][1]['comps']['order'][3],
+                                                               cutoff=self.tab['parts'][1]['comps']['cutoff'][3])
+
+            self.plot_signal(axes_handle=self.tab['parts'][1]['axes'],
+                             canvas_handle=self.tab['parts'][1]['canvas'],
+                             stype='combined')
+        else:
+            # plot source signal as results signal
+            self.plot_signal(axes_handle=self.tab['parts'][1]['axes'],
+                             canvas_handle=self.tab['parts'][1]['canvas'], stype='results')
