@@ -1,11 +1,11 @@
 #!/usr/bin/python
 
 # IMPORTANT!!
-# append path to common packages sys.path. Must reflect path to genericgui
+# append path to common packages sys.path. Must reflect path to cascadegui
 # module.
 import sys
-sys.path.insert(0, '/home/aviad/sketchbook/python/common/genericgui')
-import genericgui
+sys.path.insert(0, '/home/aviad/sketchbook/python/common/cascadegui')
+import cascadegui
 
 
 # import project specific tabs
@@ -23,7 +23,7 @@ from udemySignalProcessingTabs import *
 tabs = [Signaltab, Noisetab, Featurestab]
 
 # initialize gui
-app = genericgui.GenericGUI()
+app = cascadegui.CascadeGUI()
 # add tabs to generic gui
 app.add_tabs(tabs)
 
